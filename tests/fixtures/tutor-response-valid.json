@@ -1,0 +1,11 @@
+{
+  "addressee": "child",
+  "child_message": "Bien, vamos paso a paso.",
+  "parent_note": null,
+  "status": { "type": "incorrect", "confidence": 0.8 },
+  "next_question": "¿Querés intentar de nuevo?",
+  "steps": [{ "title": "Paso 1", "prompt": "Revisá la suma" }],
+  "practice": [],
+  "skills": [{ "code": "M3_ADD_SUB_1000", "confidence": 0.7 }],
+  "safety": { "needs_handoff": false, "reason": "" }
+}
