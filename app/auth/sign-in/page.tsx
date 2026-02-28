@@ -1,17 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import type { Route } from "next";
 
 export default function SignInPage() {
   const [role, setRole] = useState<"parent" | "child">("parent");
   const router = useRouter();
-  const params = useSearchParams();
 
   const handleContinue = () => {
     document.cookie = `app_role=${role}; path=/; max-age=1209600`;
-    const next = params.get("next");
+    const next = new URLSearchParams(window.location.search).get("next");
     const fallback: Route = role === "parent" ? "/parent/home" : "/child/home";
     if (next?.startsWith("/")) {
       router.push(next as Route);
