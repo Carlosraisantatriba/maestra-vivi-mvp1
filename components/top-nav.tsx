@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Route } from "next";
 
-type Item = { href: Route; label: string };
+type Item = { href: string; label: string };
 
 export function TopNav({ items }: { items: Item[] }) {
   const pathname = usePathname();
@@ -19,7 +19,7 @@ export function TopNav({ items }: { items: Item[] }) {
               key={item.href}
               className={`btn ${active ? "btn-primary" : "btn-secondary"}`}
               style={{ textAlign: "center" }}
-              href={item.href}
+              href={item.href as Route}
             >
               {item.label}
             </Link>
