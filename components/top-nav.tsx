@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { Route } from "next";
 
-type Item = { href: string; label: string };
+type Item = { href: Route; label: string };
 
 export function TopNav({ items }: { items: Item[] }) {
   const pathname = usePathname();
