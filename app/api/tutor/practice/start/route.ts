@@ -16,11 +16,17 @@ export async function POST() {
     .order("score", { ascending: true })
     .limit(4);
 
-  const practice = (weak ?? []).map((row: any) => ({
-    question: `Practiquemos ${row.skills?.name ?? "este skill"}. ¿Cómo lo resolverías?`,
-    expected_answer: "Respuesta abierta guiada",
-    hint: `Apuntá a mejorar ${row.skills?.code ?? "skill"}`
-  }));
+  type SkillJoin = { code?: string; name?: string } | Array<{ code?: string; name?: string }> | null;
+  type WeakRow = { score: number; skills: SkillJoin };
+
+  const practice = ((weak ?? []) as WeakRow[]).map((row) => {
+    const relation = Array.isArray(row.skills) ? row.skills[0] : row.skills;
+    return {
+      question: `Practiquemos ${relation?.name ?? "este skill"}. ¿Cómo lo resolverías?`,
+      expected_answer: "Respuesta abierta guiada",
+      hint: `Apuntá a mejorar ${relation?.code ?? "skill"}`
+    };
+  });
 
   if (practice.length === 0) {
     practice.push(

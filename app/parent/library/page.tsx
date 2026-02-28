@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { TopNav } from "@/components/top-nav";
 
@@ -27,17 +27,17 @@ export default function ParentLibraryPage() {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const query = new URLSearchParams();
     if (subject) query.set("subject", subject);
     if (week) query.set("week", week);
     const data = await fetch(`/api/library/list?${query}`).then((r) => r.json());
     setItems(data.items || []);
-  };
+  }, [subject, week]);
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
 
   const onUpload = async () => {
     if (!file || !title) return;

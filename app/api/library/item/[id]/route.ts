@@ -17,7 +17,13 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     .select("confidence, skills(code)")
     .eq("library_item_id", params.id);
 
-  const skills = (skillRows ?? []).map((row: any) => ({ code: row.skills?.code ?? "", confidence: row.confidence }));
+  type SkillJoin = { code?: string } | Array<{ code?: string }> | null;
+  type SkillRow = { confidence: number; skills: SkillJoin };
+
+  const skills = ((skillRows ?? []) as SkillRow[]).map((row) => {
+    const relation = Array.isArray(row.skills) ? row.skills[0] : row.skills;
+    return { code: relation?.code ?? "", confidence: row.confidence };
+  });
 
   return NextResponse.json({ item: { ...item, skills } });
 }

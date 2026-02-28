@@ -39,11 +39,17 @@ export async function GET(req: Request) {
     .order("score", { ascending: true })
     .limit(5);
 
-  const weakSkills = (weakRows ?? []).map((row: any) => ({
-    code: row.skills?.code ?? "",
-    name: row.skills?.name ?? "",
-    score: row.score
-  }));
+  type SkillJoin = { code?: string; name?: string } | Array<{ code?: string; name?: string }> | null;
+  type WeakRow = { score: number; skills: SkillJoin };
+
+  const weakSkills = ((weakRows ?? []) as WeakRow[]).map((row) => {
+    const relation = Array.isArray(row.skills) ? row.skills[0] : row.skills;
+    return {
+      code: relation?.code ?? "",
+      name: relation?.name ?? "",
+      score: row.score
+    };
+  });
 
   const recommendation =
     weakSkills.length > 0
