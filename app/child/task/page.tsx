@@ -20,15 +20,22 @@ export default function ChildTaskPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [tutorData, setTutorData] = useState<TutorResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [errorText, setErrorText] = useState<string | null>(null);
 
   const submitAnswer = async () => {
     setLoading(true);
+    setErrorText(null);
     const res = await fetch("/api/tutor/task/answer-check", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ statement, answer: result, participants, session_id: sessionId, subject: "math" })
     });
     const data = await res.json();
+    if (!res.ok) {
+      setErrorText(data?.error || "No pudimos validar la respuesta.");
+      setLoading(false);
+      return;
+    }
     setTutorData(data.tutor);
     if (data.session_id) setSessionId(data.session_id);
     setLoading(false);
@@ -36,31 +43,51 @@ export default function ChildTaskPage() {
 
   const submitProcedure = async () => {
     setLoading(true);
+    setErrorText(null);
     const res = await fetch("/api/tutor/task/procedure-check", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ procedure_text: result, participants, session_id: sessionId, subject: "math" })
     });
     const data = await res.json();
+    if (!res.ok) {
+      setErrorText(data?.error || "No pudimos revisar el procedimiento.");
+      setLoading(false);
+      return;
+    }
     setTutorData(data.tutor);
     setLoading(false);
   };
 
   const testTutorMessage = async () => {
     setLoading(true);
-    const res = await fetch("/api/tutor/message", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        mode: "task",
-        participants,
-        subject: "math",
-        message: `Consigna: ${statement || "2 + 3"} | Respuesta: ${result || "5"}`
-      })
-    });
-    const data = await res.json();
-    setTutorData(data.tutor ?? null);
-    setLoading(false);
+    setErrorText(null);
+    try {
+      const res = await fetch("/api/tutor/message", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          mode: "task",
+          participants,
+          subject: "math",
+          message: `Consigna: ${statement || "2 + 3"} | Respuesta: ${result || "5"}`
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setErrorText(data?.error || "No pudimos conectar con el tutor.");
+        return;
+      }
+      if (!data?.tutor) {
+        setErrorText("La API respondió sin contenido de tutora.");
+        return;
+      }
+      setTutorData(data.tutor);
+    } catch {
+      setErrorText("Error de conexión con la API del tutor.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -118,6 +145,11 @@ export default function ChildTaskPage() {
               Probar conexión OpenAI
             </button>
           </div>
+          {errorText ? (
+            <p className="status-bad small" style={{ marginTop: 10 }}>
+              {errorText}
+            </p>
+          ) : null}
         </section>
         <TutorCard data={tutorData} />
       </div>
