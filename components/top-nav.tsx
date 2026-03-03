@@ -1,13 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { Route } from "next";
+import { supabaseBrowser } from "@/lib/supabase/client";
 
 type Item = { href: string; label: string };
 
 export function TopNav({ items }: { items: Item[] }) {
   const pathname = usePathname();
+  const router = useRouter();
+
+  const handleSignOut = async () => {
+    await supabaseBrowser.auth.signOut();
+    document.cookie = "app_role=; path=/; max-age=0; samesite=lax";
+    window.location.assign("/");
+    router.refresh();
+  };
 
   return (
     <nav className="card" style={{ marginBottom: 16 }}>
@@ -25,6 +34,9 @@ export function TopNav({ items }: { items: Item[] }) {
             </Link>
           );
         })}
+        <button className="btn btn-secondary" style={{ textAlign: "center" }} onClick={handleSignOut}>
+          Cerrar sesión
+        </button>
       </div>
     </nav>
   );

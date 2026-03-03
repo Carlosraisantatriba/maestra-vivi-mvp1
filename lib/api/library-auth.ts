@@ -1,7 +1,7 @@
 import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import { getRoleFromRequest, type AppRole } from "@/lib/api/context";
+import type { AppRole } from "@/lib/api/context";
 
 export type LibraryAuthContext = {
   role: AppRole;
@@ -27,18 +27,10 @@ export async function resolveLibraryAuthContext(): Promise<LibraryAuthResult> {
     };
   }
 
-  const role = getRoleFromRequest();
-  if (role === "parent") {
-    return {
-      ok: true,
-      data: { role, userId: user.id, parentId: user.id }
-    };
-  }
-
   const supabase = getSupabaseServerClient();
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("parent_id")
+    .select("role, parent_id")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -48,6 +40,23 @@ export async function resolveLibraryAuthContext(): Promise<LibraryAuthResult> {
       status: 500,
       error: "profile_lookup_failed",
       message: profileError.message
+    };
+  }
+
+  const role = profile?.role as AppRole | undefined;
+  if (!role) {
+    return {
+      ok: false,
+      status: 403,
+      error: "profile_missing",
+      message: "Perfil no encontrado. Volvé a ingresar y completá tu perfil."
+    };
+  }
+
+  if (role === "parent") {
+    return {
+      ok: true,
+      data: { role, userId: user.id, parentId: user.id }
     };
   }
 

@@ -1,17 +1,105 @@
 "use client";
 
-import { useState } from "react";
-import type { Route } from "next";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabaseBrowser } from "@/lib/supabase/client";
 
 export default function SignInPage() {
+  const router = useRouter();
   const [role, setRole] = useState<"parent" | "child">("parent");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState<"none" | "link" | "password">("none");
+  const [status, setStatus] = useState<string | null>(null);
+  const [errorParam, setErrorParam] = useState<string | null>(null);
 
-  const handleContinue = () => {
-    document.cookie = `app_role=${role}; path=/; max-age=1209600`;
-    const next = new URLSearchParams(window.location.search).get("next");
-    const fallback: Route = role === "parent" ? "/parent/home" : "/child/home";
-    const target = next?.startsWith("/") ? (next as Route) : fallback;
-    window.location.assign(target);
+  const redirectPath = useMemo(() => (role === "parent" ? "/parent/home" : "/child/home"), [role]);
+
+  useEffect(() => {
+    const error = new URLSearchParams(window.location.search).get("error");
+    setErrorParam(error);
+  }, []);
+
+  const syncProfile = async () => {
+    const sync = await fetch("/api/profile/sync", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ role })
+    });
+    if (!sync.ok) {
+      const payload = await sync.json().catch(() => ({}));
+      throw new Error(payload?.message || payload?.error || "No se pudo sincronizar el perfil.");
+    }
+  };
+
+  const handleMagicLink = async () => {
+    if (!email.trim()) {
+      setStatus("Ingresá un email válido.");
+      return;
+    }
+
+    setLoading("link");
+    setStatus(null);
+    const { error } = await supabaseBrowser.auth.signInWithOtp({
+      email: email.trim(),
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback?role=${role}`
+      }
+    });
+
+    if (error) {
+      setStatus(`No se pudo enviar el link: ${error.message}`);
+      setLoading("none");
+      return;
+    }
+
+    setStatus("Te enviamos un link por email para ingresar.");
+    setLoading("none");
+  };
+
+  const handlePassword = async () => {
+    if (!email.trim() || !password) {
+      setStatus("Completá email y contraseña.");
+      return;
+    }
+
+    setLoading("password");
+    setStatus(null);
+
+    let signInError: string | null = null;
+    const signIn = await supabaseBrowser.auth.signInWithPassword({
+      email: email.trim(),
+      password
+    });
+    if (signIn.error) {
+      signInError = signIn.error.message;
+      const signUp = await supabaseBrowser.auth.signUp({
+        email: email.trim(),
+        password
+      });
+      if (signUp.error) {
+        setStatus(`No se pudo ingresar ni registrar: ${signUp.error.message}`);
+        setLoading("none");
+        return;
+      }
+      if (!signUp.data.session) {
+        setStatus("Cuenta creada. Revisá tu email para confirmar y luego ingresá.");
+        setLoading("none");
+        return;
+      }
+    }
+
+    try {
+      await syncProfile();
+      document.cookie = `app_role=${role}; path=/; max-age=${60 * 60 * 24 * 14}; samesite=lax`;
+      router.push(redirectPath);
+      router.refresh();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setStatus(message || signInError || "No se pudo completar el ingreso.");
+    } finally {
+      setLoading("none");
+    }
   };
 
   return (
@@ -25,9 +113,57 @@ export default function SignInPage() {
             <option value="child">Niño/a</option>
           </select>
         </div>
-        <button className="big-btn big-btn-primary" style={{ marginTop: 14 }} onClick={handleContinue}>
-          Continuar
+
+        <div className="field" style={{ marginTop: 10 }}>
+          <label htmlFor="email">Email</label>
+          <input
+            id="email"
+            type="email"
+            placeholder="tu@email.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </div>
+
+        <div className="field" style={{ marginTop: 10 }}>
+          <label htmlFor="password">Contraseña (opcional)</label>
+          <input
+            id="password"
+            type="password"
+            placeholder="Ingresá tu contraseña"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </div>
+
+        <button
+          className="big-btn big-btn-primary"
+          style={{ marginTop: 14 }}
+          onClick={handleMagicLink}
+          disabled={loading !== "none"}
+        >
+          {loading === "link" ? "Enviando..." : "Enviar link"}
         </button>
+
+        <button
+          className="big-btn big-btn-secondary"
+          style={{ marginTop: 10 }}
+          onClick={handlePassword}
+          disabled={loading !== "none"}
+        >
+          {loading === "password" ? "Procesando..." : "Ingresar con contraseña"}
+        </button>
+
+        {errorParam ? (
+          <p className="status-bad small" style={{ marginTop: 10 }}>
+            Error: {errorParam}
+          </p>
+        ) : null}
+        {status ? (
+          <p className="small" style={{ marginTop: 10 }}>
+            {status}
+          </p>
+        ) : null}
       </section>
     </main>
   );
