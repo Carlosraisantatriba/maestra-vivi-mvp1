@@ -1,11 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
 export default function SignInPage() {
-  const router = useRouter();
   const [role, setRole] = useState<"parent" | "child">("parent");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -99,8 +97,7 @@ export default function SignInPage() {
     try {
       await syncProfile();
       document.cookie = `app_role=${role}; path=/; max-age=${60 * 60 * 24 * 14}; samesite=lax`;
-      router.push(redirectPath);
-      router.refresh();
+      window.location.assign(redirectPath);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setStatus(message || signInError || "No se pudo completar el ingreso.");
