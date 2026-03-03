@@ -1,16 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { TopNav } from "@/components/top-nav";
-
-type Item = {
-  id: string;
-  title: string;
-  subject: string;
-  week_label: string;
-  ingestion_status: string;
-};
+import type { LibraryListItem, LibraryTypeValue, SubjectValue } from "@/lib/library/types";
+import { LIBRARY_TYPE_OPTIONS, SUBJECT_OPTIONS } from "@/lib/library/types";
 
 const parentItems = [
   { href: "/parent/home", label: "Inicio" },
@@ -18,71 +12,39 @@ const parentItems = [
   { href: "/parent/reports", label: "Reportes" }
 ];
 
+function formatDate(value: string): string {
+  try {
+    return new Intl.DateTimeFormat("es-AR", { dateStyle: "medium" }).format(new Date(value));
+  } catch {
+    return value;
+  }
+}
+
 export default function ParentLibraryPage() {
-  const [subject, setSubject] = useState("");
-  const [week, setWeek] = useState("");
-  const [title, setTitle] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [dictationText, setDictationText] = useState("");
-  const [items, setItems] = useState<Item[]>([]);
+  const [subject, setSubject] = useState<"" | SubjectValue>("");
+  const [weekNumber, setWeekNumber] = useState<number | "">("");
+  const [type, setType] = useState<"" | LibraryTypeValue>("");
+  const [items, setItems] = useState<LibraryListItem[]>([]);
   const [loading, setLoading] = useState(false);
 
+  const weekOptions = useMemo(() => Array.from({ length: 40 }, (_, i) => i + 1), []);
+
   const load = useCallback(async () => {
-    const query = new URLSearchParams();
-    if (subject) query.set("subject", subject);
-    if (week) query.set("week", week);
-    const data = await fetch(`/api/library/list?${query}`).then((r) => r.json());
-    setItems(data.items || []);
-  }, [subject, week]);
+    setLoading(true);
+    const qs = new URLSearchParams();
+    if (subject) qs.set("subject", subject);
+    if (weekNumber) qs.set("week_number", String(weekNumber));
+    if (type) qs.set("type", type);
+
+    const response = await fetch(`/api/library/list?${qs.toString()}`);
+    const data = await response.json();
+    setItems(data.items ?? []);
+    setLoading(false);
+  }, [subject, weekNumber, type]);
 
   useEffect(() => {
     void load();
   }, [load]);
-
-  const onUpload = async () => {
-    if (!file || !title) return;
-    setLoading(true);
-    const form = new FormData();
-    form.set("file", file);
-    form.set("title", title);
-    form.set("subject", (subject || "language") as string);
-    form.set("week_label", week || "Semana 1");
-    const res = await fetch("/api/library/upload", { method: "POST", body: form });
-    const payload = await res.json();
-    if (payload.id) {
-      await fetch("/api/library/ingest", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ library_item_id: payload.id })
-      });
-    }
-    setFile(null);
-    setTitle("");
-    await load();
-    setLoading(false);
-  };
-
-  const onCreateDictation = async () => {
-    if (!dictationText.trim()) return;
-    setLoading(true);
-    const form = new FormData();
-    form.set("title", title || "Dictado semanal");
-    form.set("subject", (subject || "language") as string);
-    form.set("week_label", week || "Semana 1");
-    form.set("text_content", dictationText);
-    const res = await fetch("/api/library/upload", { method: "POST", body: form });
-    const payload = await res.json();
-    if (payload.id) {
-      await fetch("/api/library/ingest", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ library_item_id: payload.id })
-      });
-    }
-    setDictationText("");
-    await load();
-    setLoading(false);
-  };
 
   return (
     <main>
@@ -91,63 +53,74 @@ export default function ParentLibraryPage() {
       <section className="card">
         <div className="row">
           <div className="field">
-            <label htmlFor="title">Título</label>
-            <input id="title" value={title} onChange={(e) => setTitle(e.target.value)} />
-          </div>
-          <div className="field">
             <label htmlFor="subject">Materia</label>
-            <select id="subject" value={subject} onChange={(e) => setSubject(e.target.value)}>
+            <select id="subject" value={subject} onChange={(e) => setSubject(e.target.value as "" | SubjectValue)}>
               <option value="">Todas</option>
-              <option value="math">Matemática</option>
-              <option value="language">Lengua</option>
-              <option value="english">Inglés</option>
+              {SUBJECT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </div>
           <div className="field">
             <label htmlFor="week">Semana</label>
-            <input id="week" value={week} onChange={(e) => setWeek(e.target.value)} placeholder="Semana 1" />
+            <select id="week" value={weekNumber} onChange={(e) => setWeekNumber(e.target.value ? Number(e.target.value) : "") }>
+              <option value="">Todas</option>
+              {weekOptions.map((week) => (
+                <option key={week} value={week}>
+                  Semana {week}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="type">Tipo</label>
+            <select id="type" value={type} onChange={(e) => setType(e.target.value as "" | LibraryTypeValue)}>
+              <option value="">Todos</option>
+              {LIBRARY_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
-        <div className="field" style={{ marginTop: 10 }}>
-          <label htmlFor="file">Archivo</label>
-          <input id="file" type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-        </div>
         <div className="row" style={{ marginTop: 12 }}>
-          <button className="btn btn-primary" onClick={onUpload} disabled={loading}>
-            {loading ? "Subiendo..." : "Subir material"}
+          <button className="btn btn-secondary" onClick={load} disabled={loading}>
+            {loading ? "Filtrando..." : "Aplicar filtros"}
           </button>
-          <button className="btn btn-secondary" onClick={load}>
-            Aplicar filtros
-          </button>
+          <Link className="btn btn-primary" href="/parent/library/upload">
+            Subir material
+          </Link>
         </div>
-      </section>
-      <section className="card" style={{ marginTop: 14 }}>
-        <h3>Dictado semanal (crear por texto)</h3>
-        <div className="field" style={{ marginTop: 10 }}>
-          <label htmlFor="dictation">Texto del dictado</label>
-          <textarea
-            id="dictation"
-            rows={5}
-            value={dictationText}
-            onChange={(e) => setDictationText(e.target.value)}
-            placeholder="Pegá el dictado para que el niño lo practique."
-          />
-        </div>
-        <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={onCreateDictation} disabled={loading}>
-          Crear dictado
-        </button>
       </section>
 
       <section className="grid" style={{ marginTop: 14 }}>
         {items.map((item) => (
           <Link className="card" key={item.id} href={`/parent/library/${item.id}`}>
-            <span className="pill">{item.week_label}</span>
+            <span className="pill">Semana {item.week_number}</span>
             <h3 style={{ marginTop: 8 }}>{item.title}</h3>
             <p className="small" style={{ marginTop: 6 }}>
-              {item.subject} · ingest: {item.ingestion_status}
+              {item.subject} · {item.type}
+            </p>
+            <p className="small" style={{ marginTop: 6 }}>
+              {formatDate(item.created_at)} · ingest: {item.ingestion_status}
             </p>
           </Link>
         ))}
+
+        {!loading && items.length === 0 ? (
+          <article className="card-soft">
+            <h3>Tu biblioteca está vacía</h3>
+            <p className="small" style={{ marginTop: 8 }}>
+              Subí materiales por materia, semana y tipo para que luego el niño los use en Tarea, Lectura y Práctica.
+            </p>
+            <Link className="btn btn-primary" href="/parent/library/upload" style={{ marginTop: 12, display: "inline-block" }}>
+              Subir material
+            </Link>
+          </article>
+        ) : null}
       </section>
     </main>
   );

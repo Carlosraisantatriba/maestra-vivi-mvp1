@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { TopNav } from "@/components/top-nav";
 import { EmptyState } from "@/components/empty-state";
+import { LibraryPicker } from "@/components/library/library-picker";
 
 type PracticeQuestion = {
   question: string;
@@ -21,14 +22,11 @@ const childItems = [
 export default function PracticePage() {
   const [tab, setTab] = useState<"adaptive" | "school">("adaptive");
   const [questions, setQuestions] = useState<PracticeQuestion[]>([]);
-  const [library, setLibrary] = useState<Array<{ id: string; title: string; subject: string; week_label: string }>>([]);
 
   useEffect(() => {
     const run = async () => {
       const adaptive = await fetch("/api/tutor/practice/start", { method: "POST" }).then((r) => r.json());
       setQuestions(adaptive.practice || []);
-      const school = await fetch("/api/library/list").then((r) => r.json());
-      setLibrary(school.items || []);
     };
     void run();
   }, []);
@@ -62,18 +60,7 @@ export default function PracticePage() {
         </section>
       ) : (
         <section className="grid">
-          {library.map((item) => (
-            <article className="card" key={item.id}>
-              <span className="pill">{item.week_label}</span>
-              <h3 style={{ marginTop: 8 }}>{item.title}</h3>
-              <p className="small" style={{ marginTop: 6 }}>
-                Materia: {item.subject}
-              </p>
-            </article>
-          ))}
-          {library.length === 0 ? (
-            <EmptyState title="No hay material semanal" body="Pedile a un adulto que suba archivos en Biblioteca." />
-          ) : null}
+          <LibraryPicker defaultType="practica" title="Biblioteca del colegio (Práctica)" />
           <article className="card-soft">
             <h3>Dictado semanal</h3>
             <p className="small" style={{ marginTop: 8 }}>

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { TopNav } from "@/components/top-nav";
 import { TutorCard } from "@/components/tutor-card";
 import type { TutorResponse } from "@/lib/tutor/schema";
+import { LibraryPicker } from "@/components/library/library-picker";
 
 const childItems = [
   { href: "/child/home", label: "Inicio" },
@@ -31,6 +32,11 @@ export default function ReadingPage() {
     <main>
       <TopNav items={childItems} />
       <h1 className="page-title">Modo Lectura</h1>
+      <LibraryPicker
+        defaultType="lectura"
+        title="Biblioteca del colegio (Lectura)"
+        onSelect={(item) => setText((prev) => prev || `Usar material: ${item.title} (Semana ${item.week_number})`)}
+      />
       <div className="grid" style={{ gridTemplateColumns: "1.2fr 1fr" }}>
         <section className="card">
           <div className="field">

@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { TopNav } from "@/components/top-nav";
 import { TutorCard } from "@/components/tutor-card";
 import type { TutorResponse } from "@/lib/tutor/schema";
+import type { LibraryListItem } from "@/lib/library/types";
+import { LibraryPicker } from "@/components/library/library-picker";
 
 const childItems = [
   { href: "/child/home", label: "Inicio" },
@@ -21,6 +23,30 @@ export default function ChildTaskPage() {
   const [tutorData, setTutorData] = useState<TutorResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [selectedMaterial, setSelectedMaterial] = useState<LibraryListItem | null>(null);
+
+  useEffect(() => {
+    const materialId = new URLSearchParams(window.location.search).get("material_id");
+    if (!materialId) return;
+
+    void fetch(`/api/library/item/${materialId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        const item = data?.item;
+        if (!item) return;
+        setSelectedMaterial({
+          id: item.id,
+          title: item.title,
+          subject: item.subject,
+          week_number: item.week_number,
+          type: item.type,
+          file_type: item.file_type,
+          ingestion_status: item.ingestion_status,
+          created_at: item.created_at || new Date().toISOString()
+        });
+        setStatement((prev) => prev || `Material: ${item.title} (Semana ${item.week_number})`);
+      });
+  }, []);
 
   const submitAnswer = async () => {
     setLoading(true);
@@ -94,8 +120,21 @@ export default function ChildTaskPage() {
     <main>
       <TopNav items={childItems} />
       <h1 className="page-title">Modo Tarea</h1>
+      <LibraryPicker
+        defaultType="tarea"
+        title="Biblioteca del colegio (Tarea)"
+        onSelect={(item) => {
+          setSelectedMaterial(item);
+          setStatement((prev) => prev || `Material: ${item.title} (Semana ${item.week_number})`);
+        }}
+      />
       <div className="grid" style={{ gridTemplateColumns: "1.2fr 1fr" }}>
         <section className="card">
+          {selectedMaterial ? (
+            <p className="small" style={{ marginBottom: 10 }}>
+              Material seleccionado: <strong>{selectedMaterial.title}</strong> · Semana {selectedMaterial.week_number}
+            </p>
+          ) : null}
           <div className="field">
             <label htmlFor="participants">Quiénes están en la sesión</label>
             <select
