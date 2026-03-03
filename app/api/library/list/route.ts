@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getProfileIdFromRequest, getRoleFromRequest } from "@/lib/api/context";
+import { resolveLibraryAuthContext } from "@/lib/api/library-auth";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 type NormalizedSubject = "math" | "language" | "english";
@@ -47,8 +47,13 @@ function normalizeWeekNumber(value: string | null): number | undefined {
 export async function GET(req: Request) {
   try {
     const supabase = getSupabaseServerClient();
-    const role = getRoleFromRequest();
-    const profileId = getProfileIdFromRequest();
+    const auth = await resolveLibraryAuthContext();
+    if (!auth.ok) {
+      console.error("[library/list] auth_error", { error: auth.error, message: auth.message });
+      return NextResponse.json({ error: auth.error, message: auth.message }, { status: auth.status });
+    }
+
+    const { role, parentId, userId } = auth.data;
     const { searchParams } = new URL(req.url);
     const rawSubject = searchParams.get("subject");
     const rawWeekNumber = searchParams.get("week_number");
@@ -61,7 +66,8 @@ export async function GET(req: Request) {
       raw: { subject: rawSubject, week_number: rawWeekNumber, type: rawType },
       normalized: { subject, week_number: weekNumber, type },
       role,
-      profile_id: profileId
+      user_id: userId,
+      parent_id: parentId
     });
 
     let query = supabase
@@ -70,9 +76,9 @@ export async function GET(req: Request) {
       .order("created_at", { ascending: false });
 
     if (role === "parent") {
-      query = query.eq("parent_id", profileId);
+      query = query.eq("parent_id", parentId);
     } else {
-      query = query.eq("child_id", profileId);
+      query = query.eq("parent_id", parentId).eq("child_id", userId);
     }
 
     if (subject) query = query.eq("subject", subject);

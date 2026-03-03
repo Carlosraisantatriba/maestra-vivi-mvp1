@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { NextResponse } from "next/server";
-import { getProfileIdFromRequest, getRoleFromRequest } from "@/lib/api/context";
+import { resolveLibraryAuthContext } from "@/lib/api/library-auth";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 type NormalizedSubject = "math" | "language" | "english";
@@ -78,8 +78,14 @@ function deriveExt(file: File): string {
 
 export async function POST(req: Request) {
   try {
-    if (getRoleFromRequest() !== "parent") {
-      console.error("[library/upload] forbidden", { role: getRoleFromRequest() });
+    const auth = await resolveLibraryAuthContext();
+    if (!auth.ok) {
+      console.error("[library/upload] auth_error", { error: auth.error, message: auth.message });
+      return NextResponse.json({ error: auth.error, message: auth.message }, { status: auth.status });
+    }
+
+    if (auth.data.role !== "parent") {
+      console.error("[library/upload] forbidden", { role: auth.data.role });
       return NextResponse.json(
         { error: "forbidden", message: "Solo un adulto puede subir material." },
         { status: 403 }
@@ -121,8 +127,8 @@ export async function POST(req: Request) {
     const title = String(rawPayload.title ?? "").trim();
     const childIdInput = String(rawPayload.child_id ?? "").trim();
 
-    const parentId = getProfileIdFromRequest();
-    const childId = childIdInput || "demo-child";
+    const parentId = auth.data.parentId;
+    const childId = childIdInput || auth.data.userId;
     const fileExt = deriveExt(file);
     const objectKey = `${parentId}/${childId}/${randomUUID()}.${fileExt}`;
 

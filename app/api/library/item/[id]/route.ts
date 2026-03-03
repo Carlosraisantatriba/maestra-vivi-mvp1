@@ -1,17 +1,30 @@
 import { NextResponse } from "next/server";
+import { resolveLibraryAuthContext } from "@/lib/api/library-auth";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 type SkillJoin = { code?: string } | Array<{ code?: string }> | null;
 type SkillRow = { confidence: number; skills: SkillJoin };
 
 export async function GET(_: Request, { params }: { params: { id: string } }) {
+  const auth = await resolveLibraryAuthContext();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error, message: auth.message }, { status: auth.status });
+  }
+
+  const { role, parentId, userId } = auth.data;
   const supabase = getSupabaseServerClient();
 
-  const { data: item, error } = await supabase
+  let itemQuery = supabase
     .from("library_items")
     .select("id, title, subject, week_number, type, ingestion_status, file_type, file_path, created_at")
     .eq("id", params.id)
-    .single();
+    .eq("parent_id", parentId);
+
+  if (role === "child") {
+    itemQuery = itemQuery.eq("child_id", userId);
+  }
+
+  const { data: item, error } = await itemQuery.single();
 
   if (error || !item) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
