@@ -1,37 +1,22 @@
-import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
-import { cookies } from "next/headers";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import type { AppRole } from "@/lib/api/context";
 
-export type LibraryAuthContext = {
+export type LibraryIdentity = {
   role: AppRole;
   userId: string;
   parentId: string;
 };
 
-export type LibraryAuthResult =
-  | { ok: true; data: LibraryAuthContext }
+export type LibraryIdentityResult =
+  | { ok: true; data: LibraryIdentity }
   | { ok: false; status: number; error: string; message: string };
 
-export async function resolveLibraryAuthContext(): Promise<LibraryAuthResult> {
-  const authClient = createRouteHandlerClient({ cookies });
-  const { data, error } = await authClient.auth.getUser();
-  const user = data.user;
-
-  if (error || !user) {
-    return {
-      ok: false,
-      status: 401,
-      error: "unauthorized",
-      message: "Sesión inválida o vencida."
-    };
-  }
-
+export async function resolveLibraryIdentityByUserId(userId: string): Promise<LibraryIdentityResult> {
   const supabase = getSupabaseServerClient();
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("role, parent_id")
-    .eq("id", user.id)
+    .eq("id", userId)
     .maybeSingle();
 
   if (profileError) {
@@ -56,7 +41,7 @@ export async function resolveLibraryAuthContext(): Promise<LibraryAuthResult> {
   if (role === "parent") {
     return {
       ok: true,
-      data: { role, userId: user.id, parentId: user.id }
+      data: { role, userId, parentId: userId }
     };
   }
 
@@ -71,6 +56,6 @@ export async function resolveLibraryAuthContext(): Promise<LibraryAuthResult> {
 
   return {
     ok: true,
-    data: { role, userId: user.id, parentId: profile.parent_id }
+    data: { role, userId, parentId: profile.parent_id }
   };
 }

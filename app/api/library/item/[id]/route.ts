@@ -1,12 +1,23 @@
 import { NextResponse } from "next/server";
-import { resolveLibraryAuthContext } from "@/lib/api/library-auth";
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { cookies } from "next/headers";
+import { resolveLibraryIdentityByUserId } from "@/lib/api/library-auth";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 type SkillJoin = { code?: string } | Array<{ code?: string }> | null;
 type SkillRow = { confidence: number; skills: SkillJoin };
 
 export async function GET(_: Request, { params }: { params: { id: string } }) {
-  const auth = await resolveLibraryAuthContext();
+  const authClient = createRouteHandlerClient({ cookies });
+  const {
+    data: { user },
+    error: authError
+  } = await authClient.auth.getUser();
+  if (authError || !user) {
+    return NextResponse.json({ error: "unauthorized", message: "Sesión inválida o vencida." }, { status: 401 });
+  }
+
+  const auth = await resolveLibraryIdentityByUserId(user.id);
   if (!auth.ok) {
     return NextResponse.json({ error: auth.error, message: auth.message }, { status: auth.status });
   }

@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { NextResponse } from "next/server";
-import { resolveLibraryAuthContext } from "@/lib/api/library-auth";
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
+import { cookies } from "next/headers";
+import { resolveLibraryIdentityByUserId } from "@/lib/api/library-auth";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 type NormalizedSubject = "math" | "language" | "english";
@@ -78,7 +80,17 @@ function deriveExt(file: File): string {
 
 export async function POST(req: Request) {
   try {
-    const auth = await resolveLibraryAuthContext();
+    const authClient = createRouteHandlerClient({ cookies });
+    const {
+      data: { user },
+      error: authError
+    } = await authClient.auth.getUser();
+    if (authError || !user) {
+      console.error("[library/upload] auth_error", { error: authError?.message ?? "user_null" });
+      return NextResponse.json({ error: "unauthorized", message: "Sesión inválida o vencida." }, { status: 401 });
+    }
+
+    const auth = await resolveLibraryIdentityByUserId(user.id);
     if (!auth.ok) {
       console.error("[library/upload] auth_error", { error: auth.error, message: auth.message });
       return NextResponse.json({ error: auth.error, message: auth.message }, { status: auth.status });
