@@ -12,12 +12,19 @@ export default function SignInPage() {
   const [loading, setLoading] = useState<"none" | "link" | "password">("none");
   const [status, setStatus] = useState<string | null>(null);
   const [errorParam, setErrorParam] = useState<string | null>(null);
+  const [nextPath, setNextPath] = useState<string>("/parent/home");
 
-  const redirectPath = useMemo(() => (role === "parent" ? "/parent/home" : "/child/home"), [role]);
+  const redirectPath = useMemo(() => {
+    if (nextPath.startsWith("/")) return nextPath;
+    return role === "parent" ? "/parent/home" : "/child/home";
+  }, [nextPath, role]);
 
   useEffect(() => {
-    const error = new URLSearchParams(window.location.search).get("error");
+    const params = new URLSearchParams(window.location.search);
+    const error = params.get("error");
+    const next = params.get("next");
     setErrorParam(error);
+    if (next && next.startsWith("/")) setNextPath(next);
   }, []);
 
   const syncProfile = async () => {
@@ -43,7 +50,7 @@ export default function SignInPage() {
     const { error } = await supabaseBrowser.auth.signInWithOtp({
       email: email.trim(),
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback?role=${role}`
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectPath)}&role=${role}`
       }
     });
 

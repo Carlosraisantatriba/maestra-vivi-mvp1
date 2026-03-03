@@ -7,15 +7,16 @@ import { upsertProfileForUser } from "@/lib/profile/upsert";
 export async function GET(req: NextRequest) {
   const authClient = createRouteHandlerClient({ cookies });
   const code = req.nextUrl.searchParams.get("code");
-  const roleParam = req.nextUrl.searchParams.get("role");
-  const role = roleParam === "child" ? "child" : "parent";
-  const next = role === "parent" ? "/parent/home" : "/child/home";
+  const nextParam = req.nextUrl.searchParams.get("next");
+  const safeNext = nextParam && nextParam.startsWith("/") ? nextParam : "/parent/home";
 
-  if (code) {
-    const { error } = await authClient.auth.exchangeCodeForSession(code);
-    if (error) {
-      return NextResponse.redirect(new URL(`/auth/sign-in?error=${encodeURIComponent(error.message)}`, req.url));
-    }
+  if (!code) {
+    return NextResponse.redirect(new URL("/auth/sign-in?error=missing_code", req.url));
+  }
+
+  const { error } = await authClient.auth.exchangeCodeForSession(code);
+  if (error) {
+    return NextResponse.redirect(new URL(`/auth/sign-in?error=${encodeURIComponent(error.message)}`, req.url));
   }
 
   const {
@@ -26,6 +27,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL("/auth/sign-in?error=session_missing", req.url));
   }
 
+  const roleParam = req.nextUrl.searchParams.get("role");
+  const role = roleParam === "child" || safeNext.startsWith("/child") ? "child" : "parent";
+
   try {
     await upsertProfileForUser(user.id, user.email ?? null, role);
   } catch (error) {
@@ -33,7 +37,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL(`/auth/sign-in?error=${encodeURIComponent(message)}`, req.url));
   }
 
-  const response = NextResponse.redirect(new URL(next, req.url));
+  const response = NextResponse.redirect(new URL(safeNext, req.url));
   response.cookies.set("app_role", role, {
     path: "/",
     maxAge: 60 * 60 * 24 * 14,
