@@ -1,47 +1,95 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
 import { getProfileIdFromRequest, getRoleFromRequest } from "@/lib/api/context";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
-const querySchema = z.object({
-  subject: z.enum(["math", "language", "english"]).optional(),
-  week_number: z.coerce.number().int().min(1).max(40).optional(),
-  type: z.enum(["tarea", "lectura", "dictado", "practica"]).optional()
-});
+type NormalizedSubject = "math" | "language" | "english";
+type NormalizedType = "tarea" | "lectura" | "dictado" | "practica";
+
+function normalizeToken(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "");
+}
+
+function normalizeSubject(value: string | null): NormalizedSubject | undefined {
+  if (!value) return undefined;
+  const token = normalizeToken(value);
+  if (token === "math" || token === "matematica") return "math";
+  if (token === "language" || token === "lengua") return "language";
+  if (token === "english" || token === "ingles") return "english";
+  return undefined;
+}
+
+function normalizeType(value: string | null): NormalizedType | undefined {
+  if (!value) return undefined;
+  const token = normalizeToken(value);
+  if (token === "tarea") return "tarea";
+  if (token === "lectura") return "lectura";
+  if (token === "dictado") return "dictado";
+  if (token === "practica") return "practica";
+  return undefined;
+}
+
+function normalizeWeekNumber(value: string | null): number | undefined {
+  if (!value) return undefined;
+  const token = String(value).trim();
+  const direct = Number.parseInt(token, 10);
+  if (Number.isInteger(direct) && direct >= 1 && direct <= 40) return direct;
+  const extracted = token.match(/\d{1,2}/)?.[0];
+  if (!extracted) return undefined;
+  const weekNumber = Number.parseInt(extracted, 10);
+  if (!Number.isInteger(weekNumber) || weekNumber < 1 || weekNumber > 40) return undefined;
+  return weekNumber;
+}
 
 export async function GET(req: Request) {
-  const supabase = getSupabaseServerClient();
-  const role = getRoleFromRequest();
-  const profileId = getProfileIdFromRequest();
-  const { searchParams } = new URL(req.url);
+  try {
+    const supabase = getSupabaseServerClient();
+    const role = getRoleFromRequest();
+    const profileId = getProfileIdFromRequest();
+    const { searchParams } = new URL(req.url);
+    const rawSubject = searchParams.get("subject");
+    const rawWeekNumber = searchParams.get("week_number");
+    const rawType = searchParams.get("type");
+    const subject = normalizeSubject(rawSubject);
+    const weekNumber = normalizeWeekNumber(rawWeekNumber);
+    const type = normalizeType(rawType);
 
-  const parsed = querySchema.safeParse({
-    subject: searchParams.get("subject") || undefined,
-    week_number: searchParams.get("week_number") || undefined,
-    type: searchParams.get("type") || undefined
-  });
+    console.info("[library/list] query_params", {
+      raw: { subject: rawSubject, week_number: rawWeekNumber, type: rawType },
+      normalized: { subject, week_number: weekNumber, type },
+      role,
+      profile_id: profileId
+    });
 
-  if (!parsed.success) {
-    return NextResponse.json({ error: "invalid_query", detail: parsed.error.flatten() }, { status: 400 });
+    let query = supabase
+      .from("library_items")
+      .select("id, title, subject, week_number, type, file_type, ingestion_status, created_at")
+      .order("created_at", { ascending: false });
+
+    if (role === "parent") {
+      query = query.eq("parent_id", profileId);
+    } else {
+      query = query.eq("child_id", profileId);
+    }
+
+    if (subject) query = query.eq("subject", subject);
+    if (weekNumber) query = query.eq("week_number", weekNumber);
+    if (type) query = query.eq("type", type);
+
+    const { data, error } = await query;
+    if (error) {
+      const detail = `${error.message}${error.details ? ` | ${error.details}` : ""}`;
+      console.error("[library/list] query_error", { error: detail, stack: (error as { stack?: string }).stack });
+      return NextResponse.json({ error: "query_failed", detail }, { status: 500 });
+    }
+
+    return NextResponse.json({ items: data ?? [] }, { status: 200 });
+  } catch (error) {
+    const detail = error instanceof Error ? `${error.message}\n${error.stack ?? ""}` : String(error);
+    console.error("[library/list] unhandled_error", { error: detail });
+    return NextResponse.json({ error: "query_failed", detail: String(error) }, { status: 500 });
   }
-
-  let query = supabase
-    .from("library_items")
-    .select("id, title, subject, week_number, type, file_type, ingestion_status, created_at")
-    .order("created_at", { ascending: false });
-
-  if (role === "parent") {
-    query = query.eq("parent_id", profileId);
-  } else {
-    query = query.eq("child_id", profileId);
-  }
-
-  if (parsed.data.subject) query = query.eq("subject", parsed.data.subject);
-  if (parsed.data.week_number) query = query.eq("week_number", parsed.data.week_number);
-  if (parsed.data.type) query = query.eq("type", parsed.data.type);
-
-  const { data, error } = await query;
-  if (error) return NextResponse.json({ error: "query_failed", detail: error.message }, { status: 500 });
-
-  return NextResponse.json({ items: data ?? [] });
 }
