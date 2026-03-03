@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { TopNav } from "@/components/top-nav";
 
@@ -82,9 +81,13 @@ export default function LibraryItemPage({ params }: { params: { id: string } }) 
           ))}
         </div>
 
-        <Link className="btn btn-primary" style={{ marginTop: 14, display: "inline-block" }} href={item?.use_in_task_url || "/child/task"}>
+        <a
+          className="btn btn-primary"
+          style={{ marginTop: 14, display: "inline-block" }}
+          href={item?.use_in_task_url || "/child/task"}
+        >
           Usar en Tarea
-        </Link>
+        </a>
       </section>
     </main>
   );
